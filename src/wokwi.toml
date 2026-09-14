@@ -1,0 +1,9 @@
+[wokwi]
+version = 1
+firmware = "main.py"
+elf = "main.py"
+
+# Wokwi ejecuta MicroPython directamente; asegurate de que todos los
+# archivos .py de este proyecto (models.py, sensors.py, processing.py,
+# alerts.py, power.py, controller.py, main.py) esten en la raiz del
+# proyecto de Wokwi junto a diagram.json y wokwi.toml.
