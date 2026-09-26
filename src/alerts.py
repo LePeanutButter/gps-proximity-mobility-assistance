@@ -1,65 +1,56 @@
-"""
-alerts.py
-AlertManager: traduce eventos del sistema (obstaculos, navegacion,
-bateria) en patrones acusticos sobre un buzzer activo/pasivo
-manejado por PWM. Compatible con el componente 'buzzer' de Wokwi.
-"""
+"""Acoustic and visual alert handling for VisorSense."""
 
+from machine import Pin
 import time
-from machine import Pin, PWM
 
 
 class AlertManager:
-    """Genera los distintos patrones de sonido descritos en el
-    documento de arquitectura (pitido lento, intermitente, continuo)."""
+    """Generate acoustic patterns for obstacle risk levels."""
 
-    def __init__(self, buzzer_pin):
-        self.buzzer = PWM(Pin(buzzer_pin))
-        self._silence()
+    def __init__(self, buzzer_pin, led_pin):
+        self._buzzer = Pin(buzzer_pin, Pin.OUT, value=0)
+        self._led = Pin(led_pin, Pin.OUT, value=0)
 
-    def _silence(self):
-        try:
-            self.buzzer.duty_u16(0)
-        except AttributeError:
-            self.buzzer.duty(0)
+    def update(self, distance_cm, infrared_obstacle):
+        """Apply the alert pattern required by the current obstacle state."""
+        if infrared_obstacle:
+            self._continuous_alert()
+            return "INFRARED"
 
-    def _beep(self, frequency_hz, duration_ms, volume=32768):
-        self.buzzer.freq(frequency_hz)
-        try:
-            self.buzzer.duty_u16(volume)
-        except AttributeError:
-            self.buzzer.duty(512)
-        time.sleep_ms(duration_ms)
-        self._silence()
+        if distance_cm is None:
+            self._silent()
+            return "NO_READING"
 
-    def alert_obstacle(self, risk_level):
-        """
-        Distante  -> pitido lento
-        Cercano   -> pitido intermitente rapido
-        Riesgo inmediato -> pitido continuo
-        """
-        if risk_level == "warning":
-            self._beep(1500, 100)
-            time.sleep_ms(400)
-        elif risk_level == "danger":
-            self._beep(2000, 100)
-            time.sleep_ms(100)
-        elif risk_level == "critical":
-            self._beep(3000, 300)
+        if distance_cm <= 20:
+            self._continuous_alert()
+            return "IMMEDIATE"
 
-    def alert_navigation(self, direction_deg):
-        """Tono corto para indicar un evento de navegacion (cambio de rumbo)."""
-        self._beep(1000, 150)
+        if distance_cm <= 50:
+            self._pulse_alert(100, 150)
+            return "NEAR"
 
-    def alert_system(self, event):
-        """Eventos generales del sistema: arranque, bateria baja, fix GPS, etc."""
-        if event == "startup":
-            self._beep(1200, 200)
-        elif event == "low_battery":
-            for _ in range(3):
-                self._beep(500, 200)
-                time.sleep_ms(200)
-        elif event == "gps_fix":
-            self._beep(1800, 150)
-        elif event == "arrived":
-            self._beep(2200, 400)
+        if distance_cm <= 150:
+            self._pulse_alert(100, 900)
+            return "DISTANT"
+
+        self._silent()
+        return "CLEAR"
+
+    def _continuous_alert(self):
+        """Turn the buzzer on for the current monitoring cycle."""
+        self._buzzer.value(1)
+        self._led.value(1)
+
+    def _pulse_alert(self, on_ms, off_ms):
+        """Generate one short alert pulse."""
+        self._buzzer.value(1)
+        self._led.value(1)
+        time.sleep_ms(on_ms)
+        self._buzzer.value(0)
+        self._led.value(0)
+        time.sleep_ms(off_ms)
+
+    def _silent(self):
+        """Disable acoustic and visual alerts."""
+        self._buzzer.value(0)
+        self._led.value(0)

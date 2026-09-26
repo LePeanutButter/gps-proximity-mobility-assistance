@@ -1,79 +1,72 @@
 {
   "version": 1,
-  "author": "Anonymous maker",
+  "author": "VisorSense Academic Project",
   "editor": "wokwi",
   "parts": [
     {
-      "id": "esp",
       "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": -5,
+      "left": 5,
       "attrs": { "env": "micropython-20260406-v1.28.0" }
     },
     {
       "type": "wokwi-hc-sr04",
-      "id": "us_front",
-      "top": -100,
-      "left": 150,
-      "attrs": { "distance": "100" }
-    },
-    {
-      "type": "wokwi-pushbutton",
-      "id": "ir_left",
-      "top": -100,
-      "left": -50,
-      "attrs": { "color": "green", "label": "IR-LEFT" }
-    },
-    {
-      "type": "wokwi-pushbutton",
-      "id": "ir_right",
-      "top": -100,
-      "left": 300,
-      "attrs": { "color": "blue", "label": "IR-RIGHT" }
-    },
-    {
-      "type": "wokwi-neo6m-gps",
-      "id": "gps",
-      "top": 100,
-      "left": 300,
-      "attrs": {}
+      "id": "ultrasonic",
+      "top": -142.5,
+      "left": -320.9,
+      "attrs": { "distance": "215" }
     },
     {
       "type": "wokwi-buzzer",
       "id": "buzzer",
-      "top": 100,
-      "left": -80,
+      "top": -132,
+      "left": 30.6,
       "attrs": { "volume": "0.1" }
     },
+    { "type": "wokwi-led", "id": "led", "top": 102, "left": 147.8, "attrs": { "color": "red" } },
     {
-      "type": "wokwi-potentiometer",
-      "id": "battery_sim",
-      "top": 200,
-      "left": -80,
-      "attrs": { "label": "BATTERY-SIM" }
+      "type": "wokwi-pushbutton",
+      "id": "ir_simulator",
+      "top": 121.4,
+      "left": -201.6,
+      "attrs": { "color": "blue", "label": "IR obstacle" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 42.35,
+      "left": -211.2,
+      "attrs": { "value": "1000" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 42.35,
+      "left": -96,
+      "attrs": { "value": "1000" }
     }
   ],
   "connections": [
-    [ "us_front:TRIG", "esp:D5", "green", [] ],
-    [ "us_front:ECHO", "esp:D18", "yellow", [] ],
-    [ "us_front:VCC", "esp:5V", "red", [] ],
-    [ "us_front:GND", "esp:GND.1", "black", [] ],
-
-    [ "ir_left:1.l", "esp:D19", "green", [] ],
-    [ "ir_left:2.l", "esp:GND.2", "black", [] ],
-
-    [ "ir_right:1.l", "esp:D21", "green", [] ],
-    [ "ir_right:2.l", "esp:GND.3", "black", [] ],
-
-    [ "gps:TX", "esp:RX2", "green", [] ],
-    [ "gps:RX", "esp:TX2", "yellow", [] ],
-    [ "gps:VCC", "esp:3V3", "red", [] ],
-    [ "gps:GND", "esp:GND.4", "black", [] ],
-
-    [ "buzzer:1", "esp:D25", "green", [] ],
-    [ "buzzer:2", "esp:GND.5", "black", [] ],
-
-    [ "battery_sim:SIG", "esp:VP", "green", [] ],
-    [ "battery_sim:VCC", "esp:3V3", "red", [] ],
-    [ "battery_sim:GND", "esp:GND.6", "black", [] ]
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "ultrasonic:VCC", "esp:VIN", "red", [] ],
+    [ "ultrasonic:GND", "esp:GND.1", "black", [] ],
+    [ "ultrasonic:TRIG", "esp:D25", "green", [] ],
+    [ "buzzer:1", "esp:D33", "green", [] ],
+    [ "led:C", "esp:GND.4", "black", [] ],
+    [ "ir_simulator:1.l", "esp:D27", "blue", [] ],
+    [ "ir_simulator:2.l", "esp:GND.5", "black", [] ],
+    [ "ir_simulator:1.r", "esp:27", "green", [ "v0" ] ],
+    [ "ultrasonic:VCC", "esp:5V", "red", [ "v0" ] ],
+    [ "ultrasonic:TRIG", "esp:25", "green", [ "v0" ] ],
+    [ "ultrasonic:ECHO", "r1:1", "green", [ "v0" ] ],
+    [ "r1:2", "r2:1", "green", [ "v0" ] ],
+    [ "r2:2", "esp:GND.1", "green", [ "v0" ] ],
+    [ "r1:2", "esp:26", "green", [ "v0" ] ],
+    [ "buzzer:2", "esp:33", "green", [ "v0" ] ],
+    [ "led:A", "esp:2", "green", [ "v0" ] ]
   ],
+  "serialMonitor": { "convertEol": true, "display": "always", "newline": "lf" },
   "dependencies": {}
 }
