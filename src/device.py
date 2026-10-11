@@ -2,17 +2,30 @@
 
 import time
 
+from telemetry import TelemetryBuilder
+
 
 class VisorSense:
     """Coordinate sensors, alerts, GPS, and basic navigation."""
 
-    def __init__(self, ultrasonic, infrared, alerts, gps, navigation):
+    def __init__(
+        self,
+        ultrasonic,
+        infrared,
+        alerts,
+        gps,
+        navigation,
+        telemetry_publisher=None,
+        device_id="visor-esp32-001",
+    ):
         self._ultrasonic = ultrasonic
         self._infrared = infrared
         self._alerts = alerts
         self._gps = gps
         self._navigation = navigation
         self._position = None
+        self._telemetry_builder = TelemetryBuilder(device_id)
+        self._telemetry_publisher = telemetry_publisher
 
     def run_cycle(self):
         """Execute one monitoring cycle."""
@@ -28,6 +41,16 @@ class VisorSense:
         instruction = self._navigation.instruction(self._position)
 
         self._print_status(distance, infrared_obstacle, risk, instruction, self._position)
+        telemetry = self._telemetry_builder.build(
+            distance,
+            infrared_obstacle,
+            risk,
+            instruction,
+            self._position,
+        )
+        if self._telemetry_publisher is not None:
+            self._telemetry_publisher.publish(telemetry)
+        return telemetry
 
     @staticmethod
     def _print_status(distance, infrared_obstacle, risk, instruction, position):

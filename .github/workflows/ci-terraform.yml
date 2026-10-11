@@ -1,0 +1,50 @@
+name: Terraform validation
+
+on:
+  push:
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/ci-terraform.yml"
+  pull_request:
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/ci-terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-24.04
+    env:
+      AWS_EC2_METADATA_DISABLED: "true"
+      TF_IN_AUTOMATION: "true"
+    defaults:
+      run:
+        working-directory: infra/aws/terraform
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.0"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize without backend
+        run: terraform init -backend=false -input=false
+
+      - name: Validate configuration
+        run: terraform validate
+
+      - name: Upload Terraform validation metadata
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: terraform-validation
+          path: infra/aws/terraform/.terraform.lock.hcl
+          if-no-files-found: ignore

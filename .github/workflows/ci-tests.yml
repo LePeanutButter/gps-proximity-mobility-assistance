@@ -1,0 +1,57 @@
+name: Firmware and telemetry CI
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "README.md"
+      - "docs/**"
+      - ".github/workflows/ci-tests.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "README.md"
+      - "docs/**"
+      - ".github/workflows/ci-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Compile Python-compatible modules
+        run: |
+          python -c "import glob, py_compile; [py_compile.compile(f, doraise=True) for f in glob.glob('src/*.py') + glob.glob('tests/*.py')]"
+
+      - name: Check for credential-like source content
+        shell: bash
+        run: |
+          ! grep -RInE --exclude='config_local.example.py' --exclude='test_wifi.py' \
+            '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC )?PRIVATE KEY-----|aws_secret_access_key[[:space:]]*=)' \
+            src tests infra .github
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: firmware-test-results
+          path: |
+            tests/
+            !tests/**/*.py
+          if-no-files-found: ignore

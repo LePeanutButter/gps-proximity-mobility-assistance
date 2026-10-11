@@ -1,0 +1,8 @@
+aws_region                 = "us-east-1"
+project_name               = "visorsense"
+environment                = "poc"
+telemetry_bucket_name      = "replace-with-a-globally-unique-bucket-name"
+telemetry_topic_prefix     = "visorsense/telemetry"
+telemetry_retention_days   = 30
+cloudwatch_log_retention_days = 14
+iot_thing_name             = "visor-esp32-001"
