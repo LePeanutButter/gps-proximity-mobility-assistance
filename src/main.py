@@ -14,6 +14,7 @@ from config import (
     LOOP_DELAY_MS,
     MQTT_BROKER,
     MQTT_CLIENT_ID,
+    MQTT_CONNECT_TIMEOUT_MS,
     MQTT_ENABLED,
     MQTT_KEEPALIVE,
     MQTT_PASSWORD,
@@ -34,6 +35,7 @@ from config import (
     SIMULATED_LONGITUDE,
     SIMULATION_MODE,
     TELEMETRY_ENABLED,
+    TELEMETRY_INTERVAL_MS,
     ULTRASONIC_ECHO_PIN,
     ULTRASONIC_TRIGGER_PIN,
 )
@@ -42,7 +44,12 @@ from gps import NmeaGps, SimulatedGps
 from navigation import NavigationManager
 from sensors import InfraredSensor, UltrasonicSensor
 from telemetry import TelemetryPublisher
-from transport import MqttConfig, MqttTransport, SimulatedTransport
+from transport import (
+    MqttConfig,
+    MqttTransport,
+    SimulatedTransport,
+    sync_clock_with_ntp,
+)
 from wifi_manager import WifiConfig, WifiManager
 
 
@@ -91,6 +98,7 @@ def main():
                 client_id=MQTT_CLIENT_ID,
                 qos=MQTT_QOS,
                 keepalive=MQTT_KEEPALIVE,
+                connect_timeout_ms=MQTT_CONNECT_TIMEOUT_MS,
                 username=MQTT_USERNAME,
                 password=MQTT_PASSWORD,
                 ssl=MQTT_TLS,
@@ -99,6 +107,7 @@ def main():
             telemetry_transport = MqttTransport(
                 mqtt_config,
                 connectivity=wifi_manager,
+                time_sync=sync_clock_with_ntp,
             )
         else:
             telemetry_transport = SimulatedTransport(max_payloads=10)
@@ -112,6 +121,7 @@ def main():
         navigation,
         telemetry_publisher,
         DEVICE_ID,
+        TELEMETRY_INTERVAL_MS,
     )
 
     print("VisorSense started.")

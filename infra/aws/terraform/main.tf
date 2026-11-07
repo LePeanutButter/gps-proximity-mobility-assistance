@@ -89,6 +89,7 @@ resource "aws_iam_role_policy" "iot_rule_s3" {
       Effect = "Allow"
       Action = [
         "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
         "logs:PutLogEvents",
       ]
       Resource = "${aws_cloudwatch_log_group.iot_rule.arn}:*"
@@ -104,13 +105,22 @@ resource "aws_iot_topic_rule" "telemetry_to_s3" {
 
   s3 {
     bucket_name = aws_s3_bucket.telemetry.bucket
-    key         = "raw/${timestamp()}.json"
-    role_arn    = aws_iam_role.iot_rule.arn
+    # "$$" hands the expression to AWS IoT, which evaluates it for each message.
+    key      = "raw/device_id=$${device_id}/dt=$${parse_time('yyyy-MM-dd', timestamp(), 'UTC')}/$${newuuid()}.json"
+    role_arn = aws_iam_role.iot_rule.arn
   }
 
   cloudwatch_logs {
     log_group_name = aws_cloudwatch_log_group.iot_rule.name
     role_arn       = aws_iam_role.iot_rule.arn
+  }
+
+  # Without an error action, failed S3 writes leave no trace.
+  error_action {
+    cloudwatch_logs {
+      log_group_name = aws_cloudwatch_log_group.iot_rule.name
+      role_arn       = aws_iam_role.iot_rule.arn
+    }
   }
 }
 
