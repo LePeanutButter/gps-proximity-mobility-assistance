@@ -17,8 +17,20 @@ def _ticks_ms():
     return int(time.time() * 1000)
 
 
+def sync_clock_with_ntp():
+    """Set the RTC: TLS validates certificate dates and telemetry needs real time."""
+    import ntptime
+
+    ntptime.timeout = 3
+    ntptime.settime()
+
+
 class TelemetryTransport:
     """Interface implemented by local, MQTT, or HTTP transports."""
+
+    def prepare(self):
+        """Advance connectivity before a message is built and timestamped."""
+        return True
 
     def send(self, payload):
         """Return True only when the destination confirms delivery."""
@@ -125,6 +137,7 @@ class MqttTransport(TelemetryTransport):
         clock=None,
         logger=None,
         connectivity=None,
+        time_sync=None,
     ):
         if not isinstance(config, MqttConfig):
             raise TypeError("config must be an MqttConfig")
@@ -133,6 +146,8 @@ class MqttTransport(TelemetryTransport):
         self._clock = clock or _ticks_ms
         self._logger = logger or self._default_logger
         self._connectivity = connectivity
+        self._time_sync = time_sync
+        self._time_synced = False
         self._client = None
         self._connected = False
         self._next_retry_at = 0
@@ -149,6 +164,10 @@ class MqttTransport(TelemetryTransport):
     def connected(self):
         """Return whether the adapter's last operation established a session."""
         return self._connected
+
+    def prepare(self):
+        """Connect early so the next message carries a synchronized timestamp."""
+        return self._ensure_connected()
 
     def send(self, payload):
         """Publish a payload and return true only when the client accepts it."""
@@ -168,8 +187,11 @@ class MqttTransport(TelemetryTransport):
             )
             if result is False:
                 raise OSError("MQTT client rejected publish")
+            self._logger("INFO", "published {} bytes".format(len(payload)))
             return True
-        except (OSError, RuntimeError) as error:
+        # umqtt.simple also raises MQTTException, AssertionError and IndexError
+        # when a broker rejects or closes the session; none may stop the device.
+        except Exception as error:
             self.publish_failures += 1
             self._connected = False
             self._schedule_retry()
@@ -193,13 +215,18 @@ class MqttTransport(TelemetryTransport):
 
         self.connect_attempts += 1
         try:
+            if self._time_sync is not None and not self._time_synced:
+                self._time_sync()
+                self._time_synced = True
+                self._logger("INFO", "clock synchronized")
             self._client = self._client_factory(self.config)
-            self._client.connect()
+            timeout_ms = self.config.connect_timeout_ms
+            self._client.connect(timeout=timeout_ms / 1000 if timeout_ms else None)
             self._connected = True
             self._backoff_ms = self.config.reconnect_initial_ms
             self._logger("INFO", "connected to {}".format(self.config.broker))
             return True
-        except (OSError, RuntimeError) as error:
+        except Exception as error:
             self._connected = False
             self._schedule_retry()
             self._logger("ERROR", "connection failed: {}".format(error))
@@ -218,7 +245,7 @@ class MqttTransport(TelemetryTransport):
             return
         try:
             self._client.disconnect()
-        except (OSError, RuntimeError) as error:
+        except Exception as error:
             self._logger("ERROR", "disconnect failed: {}".format(error))
         finally:
             self._client = None

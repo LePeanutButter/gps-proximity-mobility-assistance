@@ -35,19 +35,25 @@ DESTINATION_LONGITUDE = -74.0721
 # Telemetry identity and local transport. No cloud credentials are stored here.
 DEVICE_ID = "visor-esp32-001"
 TELEMETRY_ENABLED = True
+# Publishing is independent of LOOP_DELAY_MS: every message costs money in AWS.
+TELEMETRY_INTERVAL_MS = 10000
 MQTT_ENABLED = False
 MQTT_BROKER = ""
 MQTT_PORT = 8883
-MQTT_TOPIC = "visorsense/telemetry"
+# The AWS IoT policy only allows topics below "visorsense/telemetry/".
+MQTT_TOPIC = "visorsense/telemetry/visor-esp32-001"
 MQTT_CLIENT_ID = DEVICE_ID
 MQTT_QOS = 1
 MQTT_KEEPALIVE = 60
 MQTT_TLS = True
+MQTT_CONNECT_TIMEOUT_MS = 15000
 
 # Wi-Fi credentials must be supplied in a local, untracked configuration.
 WIFI_ENABLED = False
 WIFI_SSID = ""
 WIFI_PASSWORD = None
+# An empty password is only accepted when explicitly declared (Wokwi-GUEST).
+WIFI_OPEN_NETWORK = False
 WIFI_CONNECT_TIMEOUT_MS = 10000
 WIFI_RECONNECT_INITIAL_MS = 1000
 WIFI_RECONNECT_MAX_MS = 30000
@@ -63,6 +69,7 @@ def _apply_local_overrides():
     names = (
         "DEVICE_ID",
         "TELEMETRY_ENABLED",
+        "TELEMETRY_INTERVAL_MS",
         "MQTT_ENABLED",
         "MQTT_BROKER",
         "MQTT_PORT",
@@ -71,12 +78,14 @@ def _apply_local_overrides():
         "MQTT_QOS",
         "MQTT_KEEPALIVE",
         "MQTT_TLS",
+        "MQTT_CONNECT_TIMEOUT_MS",
         "MQTT_USERNAME",
         "MQTT_PASSWORD",
         "MQTT_SSL_PARAMS",
         "WIFI_ENABLED",
         "WIFI_SSID",
         "WIFI_PASSWORD",
+        "WIFI_OPEN_NETWORK",
         "WIFI_CONNECT_TIMEOUT_MS",
         "WIFI_RECONNECT_INITIAL_MS",
         "WIFI_RECONNECT_MAX_MS",
@@ -102,7 +111,7 @@ def wifi_configuration_complete():
         and isinstance(WIFI_SSID, str)
         and WIFI_SSID
         and isinstance(WIFI_PASSWORD, str)
-        and WIFI_PASSWORD
+        and (WIFI_PASSWORD or WIFI_OPEN_NETWORK is True)
     )
 
 

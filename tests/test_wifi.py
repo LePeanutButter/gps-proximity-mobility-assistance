@@ -194,6 +194,30 @@ class WifiTests(unittest.TestCase):
 
         self.assertFalse(module.mqtt_configuration_complete())
 
+    def test_declared_open_network_enables_mqtt_with_empty_password(self):
+        config_path = Path(__file__).resolve().parents[1] / "src" / "config.py"
+        with tempfile.TemporaryDirectory() as directory:
+            local_path = Path(directory) / "config_local.py"
+            local_path.write_text(
+                "WIFI_ENABLED = True\n"
+                "WIFI_OPEN_NETWORK = True\n"
+                "WIFI_SSID = 'Wokwi-GUEST'\n"
+                "WIFI_PASSWORD = ''\n"
+                "MQTT_ENABLED = True\n"
+                "MQTT_BROKER = '192.0.2.10'\n",
+                encoding="utf-8",
+            )
+            sys.path.insert(0, directory)
+            try:
+                spec = importlib.util.spec_from_file_location("config_open_network_test", config_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            finally:
+                sys.path.pop(0)
+                sys.modules.pop("config_local", None)
+
+        self.assertTrue(module.mqtt_configuration_complete())
+
     def test_mqtt_waits_for_wifi_and_sensor_loop_can_continue(self):
         wlan = FakeWlan()
         clock = FakeClock()

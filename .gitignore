@@ -27,6 +27,9 @@ user.props
 src/config_local.py
 src/secrets.py
 *.secrets.py
+*.pem
+*.crt
+*.key
 
 # MacOS desktop metadata files
 .DS_Store

@@ -162,6 +162,10 @@ class TelemetryPublisher:
         self.confirmed = 0
         self.failed = 0
 
+    def prepare(self):
+        """Let the transport connect before the next message is timestamped."""
+        return self._transport.prepare()
+
     def publish(self, message):
         """Attempt delivery and return True only on transport confirmation."""
         message["status"]["transmission"] = "pending"

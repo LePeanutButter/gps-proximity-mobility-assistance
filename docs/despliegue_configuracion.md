@@ -30,6 +30,7 @@ La configuración principal está en `src/config.py` y define:
 | `SIMULATION_MODE` | `src/config.py` | alternativa local para Wokwi |
 | `DEVICE_ID` | `src/config.py` | identidad estable del dispositivo |
 | `TELEMETRY_ENABLED` | `src/config.py` | activa el transporte simulado local |
+| `TELEMETRY_INTERVAL_MS` | `src/config.py` | periodo de publicación, independiente de `LOOP_DELAY_MS` |
 | `MQTT_ENABLED` | `src/config.py` | selecciona MQTT en lugar del transporte simulado |
 | `MQTT_BROKER` | `src/config.py` | hostname o IP del broker |
 | `MQTT_PORT` | `src/config.py` | puerto MQTT/TLS |
@@ -38,11 +39,13 @@ La configuración principal está en `src/config.py` y define:
 | `MQTT_QOS` | `src/config.py` | QoS 0, 1 o 2 |
 | `MQTT_KEEPALIVE` | `src/config.py` | keepalive MQTT en segundos |
 | `MQTT_TLS` | `src/config.py` | habilita TLS; debe permanecer activo en brokers seguros |
+| `MQTT_CONNECT_TIMEOUT_MS` | `src/config.py` | timeout de socket al conectar con el broker |
 | `MQTT_USERNAME`, `MQTT_PASSWORD` | configuración local | autenticación opcional, nunca se registra |
 | `MQTT_SSL_PARAMS` | configuración local | parámetros TLS específicos del cliente |
 | `WIFI_ENABLED` | `src/config.py` | permite usar Wi-Fi para MQTT |
 | `WIFI_SSID` | configuración local | SSID, nunca se registra |
 | `WIFI_PASSWORD` | configuración local | contraseña, nunca se versiona ni registra |
+| `WIFI_OPEN_NETWORK` | configuración local | admite contraseña vacía sólo en redes abiertas declaradas, como `Wokwi-GUEST` |
 | `WIFI_CONNECT_TIMEOUT_MS` | `src/config.py` | timeout lógico de asociación |
 | `WIFI_RECONNECT_INITIAL_MS` | `src/config.py` | backoff inicial Wi-Fi |
 | `WIFI_RECONNECT_MAX_MS` | `src/config.py` | backoff máximo Wi-Fi |
@@ -214,10 +217,14 @@ Para diagnosticar un fallo, revisar primero:
 6. mensajes `Wi-Fi ERROR` y los contadores de intentos/fallos del
    `WifiManager`.
 
-El `connect_timeout_ms` está documentado en `MqttConfig`, pero `umqtt.simple`
-no expone un timeout de conexión uniforme en su constructor; su aplicación
-efectiva depende de la biblioteca/socket concreta y debe validarse en el
-hardware elegido.
+`connect_timeout_ms` se pasa a `umqtt.simple` mediante `connect(timeout=...)`
+y cubre la conexión. No cubre la espera del PUBACK con QoS 1: `umqtt.simple`
+vuelve el socket bloqueante, por lo que un broker que deje de responder puede
+detener el ciclo de sensores. Esto debe resolverse antes de usar QoS 1 en
+hardware real.
+
+Para enviar a AWS IoT Core desde Wokwi, partir de
+`src/config_local.aws.example.py`.
 
 ## Recomendación de escalado
 

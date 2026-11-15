@@ -64,7 +64,8 @@ class FakeMqttClient:
         self.published = []
         self.disconnects = 0
 
-    def connect(self):
+    def connect(self, timeout=None):
+        self.connect_timeout = timeout
         if not self.should_connect:
             raise OSError("broker unavailable")
         self.connected = True
@@ -224,6 +225,114 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(transport.publish_failures, 1)
         self.assertFalse(transport.connected)
         self.assertEqual(client.disconnects, 1)
+
+    def make_transport(self, client, clock=None, **kwargs):
+        config = MqttConfig(
+            broker="mqtt.example.invalid",
+            topic="visorsense/test",
+            client_id="test-client",
+            connect_timeout_ms=15000,
+            reconnect_initial_ms=100,
+            reconnect_max_ms=1000,
+        )
+        return MqttTransport(
+            config,
+            client_factory=lambda unused_config: client,
+            clock=clock or FakeClock(),
+            logger=lambda level, message: None,
+            **kwargs
+        )
+
+    def test_mqtt_connect_uses_configured_timeout_in_seconds(self):
+        client = FakeMqttClient()
+
+        self.assertTrue(self.make_transport(client).send("{}"))
+        self.assertEqual(client.connect_timeout, 15)
+
+    def test_mqtt_broker_rejection_does_not_escape_transport(self):
+        class MQTTException(Exception):
+            pass
+
+        class RejectingClient(FakeMqttClient):
+            def connect(self, timeout=None):
+                raise MQTTException(5)
+
+        class ClosingClient(FakeMqttClient):
+            def publish(self, topic, payload, qos=0, retain=False):
+                raise IndexError("connection closed by broker")
+
+            def disconnect(self):
+                raise AttributeError("socket already closed")
+
+        rejected = self.make_transport(RejectingClient())
+        closed = self.make_transport(ClosingClient())
+
+        self.assertFalse(rejected.send("{}"))
+        self.assertFalse(closed.send("{}"))
+        self.assertFalse(closed.connected)
+
+    def test_clock_syncs_once_before_connecting(self):
+        calls = []
+        client = FakeMqttClient()
+        transport = self.make_transport(client, time_sync=lambda: calls.append("sync"))
+
+        self.assertTrue(transport.prepare())
+        self.assertTrue(transport.send("{}"))
+        self.assertEqual(calls, ["sync"])
+
+    def test_failed_clock_sync_blocks_connection_and_retries_after_backoff(self):
+        outcomes = [OSError("ntp timeout"), None]
+
+        def time_sync():
+            outcome = outcomes.pop(0)
+            if outcome is not None:
+                raise outcome
+
+        client = FakeMqttClient()
+        clock = FakeClock()
+        transport = self.make_transport(client, clock=clock, time_sync=time_sync)
+
+        self.assertFalse(transport.send("{}"))
+        self.assertFalse(client.connected)
+        clock.now = 100
+        self.assertTrue(transport.send("{}"))
+        self.assertTrue(client.connected)
+
+    def make_device(self, ultrasonic, transport, clock, interval_ms=0):
+        return VisorSense(
+            ultrasonic,
+            FakeInfrared(),
+            FakeAlerts(),
+            FakeGps(),
+            FakeNavigation(),
+            TelemetryPublisher(transport),
+            "visor-integration",
+            interval_ms,
+            clock,
+        )
+
+    def test_device_publishes_only_when_interval_elapses(self):
+        transport = SimulatedTransport()
+        clock = FakeClock()
+        device = self.make_device(FakeUltrasonic(), transport, clock, interval_ms=10000)
+
+        self.assertIsNotNone(device.run_cycle())
+        clock.now = 9999
+        self.assertIsNone(device.run_cycle())
+        clock.now = 10000
+        self.assertIsNotNone(device.run_cycle())
+        self.assertEqual(len(transport.payloads), 2)
+
+    def test_invalid_telemetry_does_not_stop_the_device_cycle(self):
+        class OutOfRangeUltrasonic:
+            def distance_cm(self):
+                return 450
+
+        transport = SimulatedTransport()
+        device = self.make_device(OutOfRangeUltrasonic(), transport, FakeClock())
+
+        self.assertIsNone(device.run_cycle())
+        self.assertEqual(transport.payloads, [])
 
     def test_mqtt_config_rejects_invalid_values(self):
         with self.assertRaises(ValueError):
