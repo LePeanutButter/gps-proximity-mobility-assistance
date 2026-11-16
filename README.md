@@ -1,147 +1,104 @@
-# MicroPython Firmware for ESP32
+# VisorSense
 
-[](https://github.com/RichardLitt/standard-readme)
+A MicroPython firmware for an ESP32-based obstacle-monitoring and GPS-guidance prototype, designed to run in the Wokwi simulator and on compatible ESP32 hardware.
 
-MicroPython implementation, designed to run on an ESP32 and ready to be simulated using [Wokwi](https://wokwi.com).
+## Overview
 
-The firmware integrates proximity and infrared sensors, GPS navigation, obstacle detection, audio alerts, and battery monitoring into a single embedded system.
+This repository implements a local, self-contained embedded application for:
 
-## Table of Contents
+- obstacle detection using an HC-SR04 ultrasonic sensor
+- digital infrared obstruction detection
+- GPS-based navigation guidance toward a destination
+- local audible/visual alarms through a buzzer and LED
+- continuous status monitoring in the serial console
 
-- Background
-- Install
-- Usage
-- Project Structure
-- Pin Mapping
-- Design Notes
-- Configuration
-- License
+The implementation is intentionally local-first: sensor acquisition, risk assessment, and navigation decisions happen directly on the ESP32 without requiring cloud connectivity or external services.
 
-## Background
+## Repository structure
 
-The system is an ESP32-based embedded system implemented in MicroPython. Its architecture follows the project's class diagram, with a one-to-one mapping between the main software components and their corresponding source files.
+| File | Purpose |
+| --- | --- |
+| `src/main.py` | Runtime entry point and device assembly |
+| `src/config.py` | GPIO mappings, thresholds, and simulation settings |
+| `src/device.py` | Main orchestration loop and printed status reporting |
+| `src/sensors.py` | Sensor abstractions for ultrasonic and IR inputs |
+| `src/gps.py` | NMEA GPS parsing and simulated GPS implementation |
+| `src/navigation.py` | Simple directional guidance relative to a destination |
+| `src/alerts.py` | Buzzer and LED alert patterns by risk level |
+| `src/telemetry.py` | Versioned telemetry model, validation, JSON serialization, and counters |
+| `src/transport.py` | Provider-neutral transport contract and bounded simulated transport |
+| `src/wifi_manager.py` | Non-blocking ESP32 station-mode Wi-Fi management |
+| `src/config_local.example.py` | Safe template for untracked device configuration |
+| `tests/test_telemetry.py` | Host-side tests for telemetry and device-cycle integration |
+| `src/diagram.json` | Wokwi hardware circuit definition |
+| `docs/` | Project documentation and architecture analysis |
+| `LICENSE` | MIT license |
 
-The firmware is designed to process sensor data locally on the ESP32, detect obstacles, manage navigation, provide audio feedback through a buzzer, and monitor battery level.
+## Hardware platform
 
-All core processing is performed locally without requiring an Internet connection, as required by `FR-06`.
+The application targets an ESP32 DevKit C V4 running MicroPython and is compatible with the Wokwi simulator configuration in `src/diagram.json`.
 
-## Install
+### Default pins
 
-No additional MicroPython packages are required to run the firmware in Wokwi.
+| Signal | ESP32 pin |
+| --- | --- |
+| HC-SR04 trigger | GPIO25 |
+| HC-SR04 echo | GPIO26 |
+| Infrared obstacle sensor | GPIO27 |
+| Buzzer | GPIO33 |
+| LED | GPIO2 |
+| GPS TX (ESP32 RX) | GPIO16 |
+| GPS RX (ESP32 TX) | GPIO17 |
 
-To set up the project:
+## Runtime behavior
 
-1. Create a new **MicroPython (ESP32)** project on [Wokwi](https://wokwi.com).
-2. Replace the generated `diagram.json` with the `diagram.json` included in this project.
-3. Upload or paste the seven project files into the root directory of the Wokwi project.
-4. Make sure the project is configured to use the ESP32 MicroPython environment.
-5. Start the simulation.
+The device loop in `VisorSense.run_cycle()` performs the following:
 
-## Usage
+1. Measures distance using the ultrasonic sensor.
+2. Reads the IR obstacle input state.
+3. Updates the buzzer/LED alert state based on risk.
+4. Reads the latest GPS position if available.
+5. Computes directional guidance toward the configured destination.
+6. Prints a compact telemetry summary to the console.
 
-Once the simulation is running, the firmware will continuously read the connected sensors and process the resulting data.
+The system exposes status through the serial console and can select a
+configurable Wi-Fi-backed MQTT transport when explicitly enabled. Wi-Fi and
+MQTT are disabled by default and no cloud endpoint or credentials are
+included.
 
-### Simulating obstacles
+Each monitoring cycle also produces a versioned JSON telemetry message. The
+current `SimulatedTransport` confirms local acceptance only; it does not send
+data to AWS or Adafruit IO. A future MQTT or REST adapter can implement the
+same transport interface without changing sensor or alert logic.
 
-Use the **distance** control of the `us_front` HC-SR04 sensor to simulate an object approaching the device.
+For physical testing, copy `src/config_local.example.py` to
+`src/config_local.py`, set the local Wi-Fi and broker values, and transfer the
+local file to the ESP32. The local file is ignored by Git and is never required
+for the default simulated transport.
 
-The buzzer changes its alert pattern according to the detected risk level:
+## Simulation and testing
 
-- **Low risk:** slow beeps
-- **Medium risk:** intermittent beeps
-- **High risk:** continuous alert
+The project is designed for Wokwi-based simulation. The `SIMULATION_MODE` flag in `src/config.py` can be used to substitute a fixed simulated GPS position instead of a real NMEA GPS receiver.
 
-The messages generated by `print()` are displayed in the Wokwi console whenever an obstacle is detected or the system state changes.
+The project includes host-side unit tests for telemetry and the MQTT adapter.
+There is no cloud deployment automation or real broker integration test.
 
-### Simulating infrared sensors
+## Current limitations
 
-The `ir_left` and `ir_right` buttons simulate the left and right infrared sensors.
+This implementation is a prototype and is intentionally limited to local processing. It does not yet include:
 
-Pressing either button simulates an obstacle being detected by the corresponding infrared sensor.
+- AWS IoT Core or Adafruit IO integration
+- cloud ingestion or persistence
+- device heartbeat or state registry
+- storage of historical measurements
+- dashboards with real-time analytics
 
-### Simulating GPS navigation
+Telemetry schema validation, JSON serialization, delivery counters, and a
+bounded local transport are implemented and covered by host-side tests. Cloud
+transport, persistence, dashboards, and remote alerting remain pending.
 
-The Wokwi GPS component can be configured to transmit NMEA `$GPGGA` sentences.
-
-Adjust the GPS latitude and longitude attributes to simulate movement toward the test destination configured in `main.py`.
-
-The `NavigationManager` calculates distances using the Haversine formula and determines the navigation state locally on the ESP32.
-
-### Simulating battery level
-
-The `battery_sim` potentiometer simulates the battery voltage connected to the ESP32 ADC input.
-
-The simulated battery signal is connected to **VP / GPIO36**.
-
-## Project Structure
-
-| File            | Classes                                                                        | Role                                                                       |
-| --------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `main.py`       | `Main`                                                                         | Application entry point                                                    |
-| `controller.py` | `Controller`                                                                   | Coordinates sensors, detection, navigation, alerts, and battery monitoring |
-| `sensors.py`    | `Sensor`, `ProximitySensor`, `UltrasonicSensor`, `InfraredSensor`, `GPSSensor` | Hardware sensor abstraction and data acquisition                           |
-| `models.py`     | `GPSPosition`, `Obstacle`, `Destination`                                       | Data structures used by the system                                         |
-| `processing.py` | `ObstacleDetector`, `NavigationManager`                                        | Risk assessment and navigation logic                                       |
-| `alerts.py`     | `AlertManager`                                                                 | Buzzer alert patterns                                                      |
-| `power.py`      | `BatteryManager`                                                               | Battery-level monitoring through the ADC                                   |
-| `diagram.json`  | —                                                                              | Wokwi circuit definition                                                   |
-| `wokwi.toml`    | —                                                                              | Wokwi simulator configuration                                              |
-
-## Pin Mapping
-
-The default GPIO configuration is defined in `controller.py` and can be adjusted if the hardware configuration changes.
-
-| Signal           | ESP32 Pin   |
-| ---------------- | ----------- |
-| HC-SR04 TRIG     | GPIO5       |
-| HC-SR04 ECHO     | GPIO18      |
-| Left IR sensor   | GPIO19      |
-| Right IR sensor  | GPIO21      |
-| GPS TX → ESP RX2 | GPIO16      |
-| GPS RX ← ESP TX2 | GPIO17      |
-| Buzzer           | GPIO25      |
-| Battery ADC      | GPIO34 (VP) |
-
-## Design Notes
-
-### Local Processing
-
-All obstacle-risk processing and navigation calculations are performed directly on the ESP32. The firmware does not depend on Internet connectivity for its core functionality.
-
-This design satisfies the offline-processing requirement defined by `FR-06`.
-
-### Obstacle Detection Thresholds
-
-`ObstacleDetector` uses three configurable distance thresholds:
-
-- **150 cm:** low-risk detection
-- **60 cm:** medium-risk detection
-- **20 cm:** high-risk detection
-
-These values can be configured through the class constructor and should be calibrated under real-world operating conditions according to `FR-01` and `FR-02`.
-
-### Audio Alerts
-
-`AlertManager` uses PWM to control the buzzer frequency and duration.
-
-The alert pattern changes according to the detected obstacle risk level, providing progressively more urgent feedback and satisfying `FR-03`.
-
-### Navigation
-
-`NavigationManager` uses the Haversine formula to calculate geographic distance between the current GPS position and the destination.
-
-This allows navigation calculations to be performed locally without relying on an external navigation service.
-
-## Configuration
-
-The main hardware configuration can be adjusted in `controller.py`.
-
-The obstacle-detection thresholds can be configured when creating the `ObstacleDetector` instance.
-
-The test destination used during simulation can be modified in `main.py`.
-
-For physical deployment, sensor thresholds, battery-voltage calibration, and GPS configuration should be adjusted according to the actual hardware and operating environment.
+These limitations are documented in the architecture and diagnostic notes under `docs/`.
 
 ## License
 
-[MIT](LICENSE) ©COPYRIGHT HOLDER
+[MIT](LICENSE)
